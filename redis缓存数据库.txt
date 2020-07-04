@@ -1,0 +1,468 @@
+### 4.3号知识分享-redis缓存数据库（3班1组黄茂俊）
+
+#### 1.redis概述
+
+```tex
+1、概念
+	redis是完全开源免费的，采用的是BSD（Berkeley Software Distribution）协议，是高性能的key-value数据库，也就是常说的Not noly sql非关系型数据库。
+2、三个特点
+	支持数据持久化：Redis支持数据的持久化，可以将内存中的数据保存在磁盘中，重启的时候可以再次加载进行使用。
+	支持数据备份：即分布式环境下多个redis数据库master-slave主从复制模式的数据备份。
+	支持丰富的key-value数据类型：Redis不仅仅支持简单的key-value类型的数据，同时还提供list，set，zset，hash等数据结构的存储。
+3、优势
+	性能极高： Redis能读的速度是110000次/s,写的速度是81000次/s 。
+	丰富数据类型：Redis支持二进制案例的 Strings, Lists, Hashes, Sets 及 Ordered Sets 数据类型操作。
+	原子操作：Redis的所有操作都是原子性的，意思就是要么成功执行要么失败完全不执行。单个操作是原子性的。多个操作也支持事务，即原子性，通过MULTI和EXEC指令包起来。
+	其他丰富特性：Redis还支持 publish/subscribe, 通知, key 过期等等特性。
+4、应用场景
+	会话缓存（最常用）、token缓存、消息队列、发布订阅消息、活动排行榜或计数、商品列表或评论列表等。
+```
+
+#### 2.安装与使用 
+
+##### 2.1资源路径
+
+http://download.redis.io/releases/
+
+##### 2.2在CentOS6.5下安装
+
+1、下载
+
+```tex
+[root@localhost local]# wget http://download.redis.io/releases/redis-4.0.2.tar.gz
+```
+
+![1585749727846](img\1585749727846.png)
+
+2、解压到当前路径
+
+```tex
+[root@localhost local]# tar -zxvf redis-4.0.2.tar.gz
+```
+
+3、 进入解压后的目录进行编译
+
+```tex
+[root@localhost redis-4.0.2]# cd redis-4.0.2
+[root@localhost redis-4.0.2]# make
+```
+
+5、安装到指定目录,如 /usr/local/redis
+
+```tex
+[root@localhost redis-4.0.2]# make PREFIX=/usr/local/redis install
+```
+
+![1585750262445](img\1585750262445.png)
+
+##### 2.3启动
+
+1、了解配置文件redis.conf
+
+```tex
+	该文件是redis服务器的配置文件，重点关注端口号（默认是6379）、绑定IP地址、是否打开后台方式启动（默认为no即只有前端启动模式）、服务器登录密码（默认没有）等配置项。
+```
+
+2、拷贝配置文件到安装目录下
+
+```tex
+[root@localhost redis]# cp /usr/local/redis-4.0.2/redis.conf /usr/local/redis/bin
+[root@localhost redis]# 
+```
+
+![1585750978487](img\1585750978487.png)
+
+3、前端模式启动
+
+```tex
+	直接运行bin/redis-server将以前端模式启动，并且出现下图。不推荐，因为前端方式启动只能另外开启一个命令窗口。
+```
+
+![1585751179027](img\1585751179027.png)
+
+4、后端模式启动
+
+```tex
+首先修改配置文件：[root@localhost bin]# vi redis.conf
+修改项如下：在general一般配置选项中将daemonize设置成yes即后端启动模式。
+vi命令简单介绍：
+	i:表示启动编辑；
+	esc:表示退出编辑；
+	shift+冒号：表示进入退出选项；
+	wq:保存并退出。
+```
+
+![1585751424761](img\1585751424761.png)
+
+```tex
+启动：[root@localhost bin]# ./redis-server redis.conf
+注意：出现如下“配置已经被加载”的提示表示后端模式启动成功。
+```
+
+![1585751726121](img\1585751726121.png)
+
+##### 2.4基本使用
+
+1、启动redis-cli客户端(也可以使用第三方可视化客户端工具如RedisDesktopManager)
+
+```tex
+[root@localhost bin]# ./redis-cli
+127.0.0.1:6379> 
+```
+
+2、设置、获取key-value
+
+![1585752404760](img\1585752404760.png)
+
+#### 3.redis命令
+
+##### 3.1key介绍
+
+```tex
+	key是二进制不安全字符串：这跟redis采用的协议有关，目前把包含空格或者\r\n这样的key视为非法key。
+	key长度要求：太长占用内存、太短可读性差。
+```
+
+##### 3.2key的相关命令
+
+```tex
+	设置key-value值:set key
+	获得key-value值:get key
+	返回当前数据库key的数量：dbsize。
+	是否存在key:exists key，返回1表示存在，返回0表示不存在。
+	返回key value类型：type key,返回none表示不存在string、list、set、hash等类型。
+	设置key过期时间：exipre key seconds，1表示成功，0表示key不存在。
+	返回过期秒数：ttl key，返回单位是秒，-1表示没有设置过期时间，-2表示不存在。
+	删除key（s）:del key1 key2 ... keyN,返回删除key的数目。
+	
+	匹配key:keys pattern,返回所有匹配到指定模式的key。
+	随机从当前数据库返回一个key:randomkey，当前数据库为空则返回空字符串。
+	重命名key:rename oldkey newkey,如果newkey存在则被覆盖，1表示成功，0表示失败，可能是oldkey不存在或者和newkey相同。
+```
+
+##### 3.3和服务器连接相关命令
+
+```tex
+	指定IP、端口号连接服务器：./redis-cli -h 192.168.1.102 -p 6379
+	验证登录(假设在配置文件中设置服务器登录密码为123456)：auth 123456
+	关闭连接命令：quit
+```
+
+##### 3.4数据库相关命令
+
+```tex
+	选择数据库：select db-index,默认16个数据库，0开始，返回1表示成功，0表示失败。
+	移动key到其他数据库：move key db-index,返回1表示成功，0表示失败，可能key不存在也可能存在于要迁移的数据库中。
+	刷新当前数据库：flushdb,不会失败，删库跑路您值得拥有！
+	刷新所有数据库：flushall，不会失败，删库跑路，从删库到入狱您值得拥有！
+```
+
+##### 3.5String相关命令
+
+```tex
+ 	set(key, value)：给数据库中名称为key的string赋予值value
+    get(key)：返回数据库中名称为key的string的value
+    mget(key1, key2,…, key N)：返回库中多个string（它们的名称为key1，key2…）的value
+    mset(key1, value1, key2, value2,…key N, value N)：同时给多个string赋值，名称为key i的string赋值value i
+    setnx(key, value)：如果不存在名称为key的string，则向库中添加string，名称为key，值为value
+    setex(key, time, value)：向库中添加string（名称为key，值为value）同时，设定过期时间time
+    append(key, value)：名称为key的string的值附加value
+    substr(key, start, end)：返回名称为key的string的value的子串
+
+    以下命令则可以自行了解，讲的太多太枯燥乏味，需要时自取即可
+    getset(key, value)：给名称为key的string赋予上一次的value
+    msetnx(key1, value1, key2, value2,…key N, value N)：如果所有名称为key i的string都不存在，则向库中添加string，名称key i赋值为value i
+    incr(key)：名称为key的string增1操作
+    incrby(key, integer)：名称为key的string增加integer
+    decr(key)：名称为key的string减1操作
+    decrby(key, integer)：名称为key的string减少integer
+```
+
+##### 3.6list相关命令
+
+```tex
+ 	rpush(key, value)：在名称为key的list尾添加一个值为value的元素
+    lpush(key, value)：在名称为key的list头添加一个值为value的 元素
+    llen(key)：返回名称为key的list的长度
+    
+    以下命令则可以自行了解
+    lrange(key, start, end)：返回名称为key的list中start至end之间的元素（下标从0开始，下同）
+    ltrim(key, start, end)：截取名称为key的list，保留start至end之间的元素
+    lindex(key, index)：返回名称为key的list中index位置的元素
+    lset(key, index, value)：给名称为key的list中index位置的元素赋值为value
+    lrem(key, count, value)：删除count个名称为key的list中值为value的元素。count为0，删除所有值为value的元素，count>0从头至尾删除count个值为value的元素，count<0从尾到头删除|count|个值为value的元素。 lpop(key)：返回并删除名称为key的list中的首元素 rpop(key)：返回并删除名称为key的list中的尾元素 blpop(key1, key2,… key N, timeout)：lpop命令的block版本。即当timeout为0时，若遇到名称为key i的list不存在或该list为空，则命令结束。如果timeout>0，则遇到上述情况时，等待timeout秒，如果问题没有解决，则对keyi+1开始的list执行pop操作。
+    brpop(key1, key2,… key N, timeout)：rpop的block版本。参考上一命令。
+    rpoplpush(srckey, dstkey)：返回并删除名称为srckey的list的尾元素，并将该元素添加到名称为dstkey的list的头部
+```
+
+##### 3.7set相关命令
+
+```tex
+ 	sadd(key, member)：向名称为key的set中添加元素member
+    srem(key, member) ：删除名称为key的set中的元素member
+    sinter(key1, key2,…key N) ：求交集（在对账中可以方便使用）
+     
+    以下命令则可以自行了解
+    spop(key) ：随机返回并删除名称为key的set中一个元素
+    smove(srckey, dstkey, member) ：将member元素从名称为srckey的集合移到名称为dstkey的集合
+    scard(key) ：返回名称为key的set的基数
+    sismember(key, member) ：测试member是否是名称为key的set的元素
+    sinter(key1, key2,…key N) ：求交集
+    sinterstore(dstkey, key1, key2,…key N) ：求交集并将交集保存到dstkey的集合
+    sunion(key1, key2,…key N) ：求并集
+    sunionstore(dstkey, key1, key2,…key N) ：求并集并将并集保存到dstkey的集合
+    sdiff(key1, key2,…key N) ：求差集
+    sdiffstore(dstkey, key1, key2,…key N) ：求差集并将差集保存到dstkey的集合
+    smembers(key) ：返回名称为key的set的所有元素
+    srandmember(key) ：随机返回名称为key的set的一个元素
+```
+
+##### 3.8zset(sorted set)相关命令
+
+```tex
+	zadd(key, score, member)：向名称为key的zset中添加元素member，score用于排序。如果该元素已经存在，则根据score更新该元素的顺序。
+    zrem(key, member) ：删除名称为key的zset中的元素member
+    zincrby(key, increment, member) ：如果在名称为key的zset中已经存在元素member，则该元素的score增加increment；否则向集合中添加该元素，其score的值为increment
+    zrank(key, member) ：返回名称为key的zset（元素已按score从小到大排序）中member元素的rank（即index，从0开始），若没有member元素，返回“nil”
+    zrevrank(key, member) ：返回名称为key的zset（元素已按score从大到小排序）中member元素的rank（即index，从0开始），若没有member元素，返回“nil”
+    zrange(key, start, end)：返回名称为key的zset（元素已按score从小到大排序）中的index从start到end的所有元素
+    zrevrange(key, start, end)：返回名称为key的zset（元素已按score从大到小排序）中的index从start到end的所有元素
+    zrangebyscore(key, min, max)：返回名称为key的zset中score >= min且score <= max的所有元素 zcard(key)：返回名称为key的zset的基数 zscore(key, element)：返回名称为key的zset中元素element的score zremrangebyrank(key, min, max)：删除名称为key的zset中rank >= min且rank <= max的所有元素 zremrangebyscore(key, min, max) ：删除名称为key的zset中score >= min且score <= max的所有元素
+    zunionstore / zinterstore(dstkeyN, key1,…,keyN, WEIGHTS w1,…wN, AGGREGATE SUM|MIN|MAX)：对N个zset求并集和交集，并将最后的集合保存在dstkeyN中。对于集合中每一个元素的score，在进行AGGREGATE运算前，都要乘以对于的WEIGHT参数。如果没有提供WEIGHT，默认为1。默认的AGGREGATE是SUM，即结果集合中元素的score是所有集合对应元素进行SUM运算的值，而MIN和MAX是指，结果集合中元素的score是所有集合对应元素中最小值和最大值。
+```
+
+##### 3.9hash相关命令
+
+```tex
+    hset(key, field, value)：向名称为key的hash中添加元素field<—>value
+    hget(key, field)：返回名称为key的hash中field对应的value
+    hmget(key, field1, …,field N)：返回名称为key的hash中field i对应的value
+    hmset(key, field1, value1,…,field N, value N)：向名称为key的hash中添加元素field i<—>value i
+    hincrby(key, field, integer)：将名称为key的hash中field的value增加integer
+    hexists(key, field)：名称为key的hash中是否存在键为field的域
+    hdel(key, field)：删除名称为key的hash中键为field的域
+    hlen(key)：返回名称为key的hash中元素个数
+    hkeys(key)：返回名称为key的hash中所有键
+    hvals(key)：返回名称为key的hash中所有键对应的value
+    hgetall(key)：返回名称为key的hash中所有的键（field）及其对应的value
+```
+
+##### 3.10扩展--其他好用的Linux命令
+
+```tex
+	Linux命令查看进程是否启动：ps（进程显示） aux（所有详细信息） | grep redis-server
+	Linux命令查看进程pid:pgrep -l redis-server,p(进程)、grep（全局进程匹配）、-l(同时显示pid和进程名)
+```
+
+![1585442592220](img\1585442592220.png)
+
+##### 3.11Java操纵linux下的redis服务器
+
+1、关闭防火墙(慎用)
+
+```tex
+命令：service iptables stop
+```
+
+2、创建springboot项目后导包
+
+```tex
+ 		<!--配置redis-->
+        <!-- https://mvnrepository.com/artifact/redis.clients/jedis -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>2.9.0</version>
+        </dependency>
+```
+
+3、创建redis-cli客户端工具类
+
+```java
+@Component
+public class RedisCli {
+
+    @Value("${redisServerIP}")
+    private String redisIp;
+
+    @Value("${auth}")
+    private String auth;
+
+    public Jedis getJedis(){
+        Jedis jedis = new Jedis(redisIp, 6379);
+        jedis.auth(auth);
+        return jedis;
+    }
+}
+```
+
+4、在拦截器中使用jedis判断token是否过期
+
+```java
+package com.xy.gd_carsale.interceptor;
+
+import com.alibaba.fastjson.JSON;
+import com.xy.gd_carsale.util.MyResponseBody;
+import com.xy.gd_carsale.util.RedisCli;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.ModelAndView;
+import redis.clients.jedis.Jedis;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.PrintWriter;
+
+@Component
+public class TokenInterceptor implements HandlerInterceptor {
+
+    private String urls[] = {
+            "/gd_carsale/customer/login",
+            "/gd_carsale/customer/register",
+            "/gd_carsale/employee/login",
+            "/gd_carsale/employee/register",
+            "/gd_carsale/employee/requireCode",
+            "/gd_carsale/customer/requireCode",
+            "swagger-ui.html"
+    };
+
+    @Autowired
+    private RedisCli redisCli;
+
+    @Autowired
+    private MyResponseBody responseBody;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("请求处理前做的事------------------------------------");
+        String url = request.getRequestURI();
+        System.out.println(url);
+        String method = request.getMethod();
+        if(url.contains("swagger")){
+            return true;
+        }
+        if (!method.equals("OPTIONS")) {
+            // 遍历需要忽略拦截的路径
+            for (String item : this.urls) {
+                if (item.equals(url)) {
+                    return true;
+                }
+            }
+            String token = request.getParameter("token");
+            response.setCharacterEncoding("UTF-8");
+            response.setContentType("application/json; charset=utf-8");
+            String result = "";
+            if (token == null) {
+                responseBody.setCode(741).setMessage("请求没有token");
+                result = JSON.toJSONString(responseBody);
+                PrintWriter writer = response.getWriter();
+                writer.append(result);
+                writer.flush();
+                return false;
+            } else {
+                Jedis jedis = redisCli.getJedis();
+                if (!jedis.exists(token)) {
+                    responseBody.setCode(741).setMessage("token失效");
+                    result = JSON.toJSONString(responseBody);
+                    PrintWriter writer = response.getWriter();
+                    writer.append(result);
+                    writer.flush();
+                    return false;
+                } else {
+                jedis.expire(token, 3600);
+                    return true;
+                }
+            }
+        }
+        System.out.println("拦截器处理的蛮好，没发现异常！");
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable ModelAndView modelAndView) throws Exception {
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable Exception ex) throws Exception {
+    }
+}
+```
+
+#### 4.redis集群搭建实例
+
+##### 4.1安装ruby环境
+
+```tex
+下载ruby:wget http://ftp.ruby-lang.org/pub/ruby/2.3/ruby-2.3.1.tar.gz
+解压：tar zxvf ruby-2.3.1.tar.gz
+定位到ruby目录下：cd ruby-2.3.1
+编译：make
+安装：make install
+查看ruby版本：ruby -v
+gem安装redis:gem install redis(注意，redis3.0（我使用的是redis-4.1.3）以后ruby版本需要>=2.3.0)
+成功界面：出现如下界面表示成功，可以执行ruby脚本命令创建redis-cluster。
+```
+
+![1585617377206](img\1585617377206.png)
+
+##### 4.2规划redis集群
+
+```tex
+创建redis-cluster目录：在/usr/local下创建redis-cluster目录。
+创建6个节点：将/usr/local/redis复制到redis-cluster目录下，并创建redis02、redis03、redis04、redis05、redis06等6个文件夹，并把/usr/local/redis下的bin文件分别复制进去。
+复制ruby脚本文件：将/usr/local/redis下的redis-trib.rb脚本文件复制到redis-cluster目录下。
+修改配置文件：
+	port分别修改为6381、6382、6383、6384、6385、6386；
+	IP地址全部绑定为虚拟机IP bind 192.168.1.101；
+	开启集群设置cluster-enabled yes;
+	# cluster-config-file nodes-6379.conf，将此条款放开，并修改对应的端口号。
+```
+
+![1585617723998](img\1585617723998.png)
+
+##### 4.3启动各个redis服务器
+
+![1585619752818](img\1585619752818.png)
+
+##### 4.5根据ruby脚本执行创建集群命令
+
+```tex
+出现下列情况表示集群创建成功了。
+```
+
+![1585620764283](img\1585620764283.png)
+
+![1585624112935](img\1585624112935.png)
+
+##### 4.6测试（未使用跟踪重定向）
+
+![1585627910001](img\1585627910001.png)
+
+##### 4.7使用-c命令跟踪重定向
+
+![1585625815876](img\1585625815876.png)
+
+##### 4.8回顾创建集群过程中出现的问题
+
+![1585621348965](img\1585621348965.png)
+
+解决问题
+
+```tex
+	需要删除所有redis节点bin目录下面的node.conf，没有放开redis.conf配置文件中的cluster-config-file nodes-6379.conf条款，也没有把端口号修改过来。
+```
+
+![1585622410111](img\1585622410111.png)
+
+![1585624112935](img\1585624112935.png)
+
+```tex
+各个节点下bin文件目录下在创建集群后会出现对应的节点配置文件，如下图中的nodes-6381.conf
+```
+
+![1585624270798](img\1585624270798.png)
+
+
+
